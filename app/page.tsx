@@ -3,24 +3,13 @@
 import type React from "react"
 import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
-import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/hooks/use-toast"
 import {
   Upload,
   FileUp,
@@ -31,6 +20,8 @@ import {
   ChevronUp,
   ChevronDown,
   Download,
+  Info,
+  ArrowUpDown,
 } from "lucide-react"
 import Papa from "papaparse"
 
@@ -79,8 +70,7 @@ export default function CsvValidator() {
   const [sortDirection, setSortDirection] = useState<SortDirection>(null)
   const [selectedResult, setSelectedResult] = useState<ValidationResult | null>(null)
   const [detailDialogOpen, setDetailDialogOpen] = useState<boolean>(false)
-  const [alertDialogOpen, setAlertDialogOpen] = useState<boolean>(false)
-  const [alertMessage, setAlertMessage] = useState<string>("")
+  const { toast } = useToast()
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError("")
@@ -201,9 +191,13 @@ export default function CsvValidator() {
           })
         } catch (error) {
           const errorMessage = `API 호출 오류: ${error instanceof Error ? error.message : String(error)}`
-          // AlertDialog로 오류 표시
-          setAlertMessage(errorMessage)
-          setAlertDialogOpen(true)
+
+          // Toast로 오류 표시
+          toast({
+            title: "API 오류",
+            description: errorMessage,
+            variant: "destructive",
+          })
 
           validationResults.push({
             original: item,
@@ -293,7 +287,9 @@ export default function CsvValidator() {
 
   // 정렬 아이콘 표시
   const renderSortIcon = (field: SortField) => {
-    if (sortField !== field) return null
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-4 w-4 inline ml-1 text-gray-400" />
+    }
 
     return sortDirection === "asc" ? (
       <ChevronUp className="h-4 w-4 inline ml-1" />
@@ -342,93 +338,124 @@ export default function CsvValidator() {
     document.body.removeChild(link)
   }
 
+  // 탭 렌더링
+  const renderTabs = () => {
+    return (
+      <div className="flex justify-center mb-6">
+        <div className="toss-tabs inline-flex">
+          <div className="flex space-x-1">
+            <button
+              className={`toss-tab ${activeTab === "upload" ? "toss-tab-active" : "toss-tab-inactive"}`}
+              onClick={() => setActiveTab("upload")}
+            >
+              1. 파일 업로드
+            </button>
+            <button
+              className={`toss-tab ${activeTab === "validate" ? "toss-tab-active" : "toss-tab-inactive"} ${!file ? "opacity-50 cursor-not-allowed" : ""}`}
+              onClick={() => file && setActiveTab("validate")}
+              disabled={!file}
+            >
+              2. 데이터 검증
+            </button>
+            <button
+              className={`toss-tab ${activeTab === "results" ? "toss-tab-active" : "toss-tab-inactive"} ${results.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+              onClick={() => results.length > 0 && setActiveTab("results")}
+              disabled={results.length === 0}
+            >
+              3. 검증 결과
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="container mx-auto py-10">
-      <h1 className="text-3xl font-bold mb-6 text-center">도서 정보 검증 도구</h1>
+    <div className="container mx-auto py-10 px-4 max-w-5xl">
+      <h1 className="text-3xl font-bold mb-8 text-center">서지 정보 검증 도구</h1>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="upload">1. 파일 업로드</TabsTrigger>
-          <TabsTrigger value="validate" disabled={!file}>
-            2. 데이터 검증
-          </TabsTrigger>
-          <TabsTrigger value="results" disabled={results.length === 0}>
-            3. 검증 결과
-          </TabsTrigger>
-        </TabsList>
+      {renderTabs()}
 
-        <TabsContent value="upload">
-          <Card>
-            <CardHeader>
-              <CardTitle>CSV 파일 업로드</CardTitle>
-              <CardDescription>도서 정보가 포함된 CSV 파일을 업로드하세요.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-4">
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>필수 열 정보</AlertTitle>
-                  <AlertDescription>CSV 파일에는 다음 열이 포함되어야 합니다: 이름, ISBN, 가격</AlertDescription>
-                </Alert>
+      {activeTab === "upload" && (
+        <Card className="toss-card">
+          <CardContent className="p-8">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold mb-2">CSV 파일 업로드</h2>
+              <p className="text-gray-500 mb-6">도서 정보가 포함된 CSV 파일을 업로드하세요.</p>
+
+              <div className="bg-blue-50 rounded-lg p-4 mb-6 flex items-start">
+                <Info className="h-5 w-5 text-primary mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <h3 className="font-medium text-primary mb-1">필수 열 정보</h3>
+                  <p className="text-sm text-gray-600">CSV 파일에는 다음 열이 포함되어야 합니다: 이름, ISBN, 가격</p>
+                </div>
               </div>
 
-              <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-12 mb-4">
-                <Upload className="h-10 w-10 text-muted-foreground mb-4" />
-                <div className="flex flex-col items-center text-center mb-4">
-                  <h3 className="font-medium">CSV 파일을 여기에 드래그하거나 클릭하여 업로드하세요</h3>
-                  <p className="text-sm text-muted-foreground mt-1">CSV 파일만 지원됩니다</p>
+              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-lg p-12 mb-6">
+                <Upload className="h-12 w-12 text-gray-400 mb-4" />
+                <div className="flex flex-col items-center text-center mb-6">
+                  <h3 className="font-medium mb-1">CSV 파일을 여기에 드래그하거나 클릭하여 업로드하세요</h3>
+                  <p className="text-sm text-gray-500">CSV 파일만 지원됩니다</p>
                 </div>
                 <Input id="file-upload" type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
-                <Button onClick={() => document.getElementById("file-upload")?.click()}>
+                <Button
+                  onClick={() => document.getElementById("file-upload")?.click()}
+                  className="toss-button-primary px-6 py-2.5"
+                >
                   <FileUp className="mr-2 h-4 w-4" />
                   파일 선택
                 </Button>
               </div>
 
               {file && (
-                <Alert className="mt-4">
-                  <CheckCircle className="h-4 w-4" />
-                  <AlertTitle>파일 업로드 완료</AlertTitle>
-                  <AlertDescription>
-                    {file.name} ({(file.size / 1024).toFixed(2)} KB) 파일이 업로드되었습니다.
-                    {csvData.length > 0 && ` ${csvData.length}개의 행이 로드되었습니다.`}
-                  </AlertDescription>
-                </Alert>
+                <div className="bg-green-50 rounded-lg p-4 flex items-start">
+                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 mr-3 flex-shrink-0" />
+                  <div>
+                    <h3 className="font-medium text-green-700 mb-1">파일 업로드 완료</h3>
+                    <p className="text-sm text-gray-600">
+                      {file.name} ({(file.size / 1024).toFixed(2)} KB) 파일이 업로드되었습니다.
+                      {csvData.length > 0 && ` ${csvData.length}개의 행이 로드되었습니다.`}
+                    </p>
+                  </div>
+                </div>
               )}
 
               {error && (
-                <Alert variant="destructive" className="mt-4">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>오류</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
+                <div className="bg-red-50 rounded-lg p-4 mt-4 flex items-start">
+                  <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 mr-3 flex-shrink-0" />
+                  <div>
+                    <h3 className="font-medium text-red-700 mb-1">오류</h3>
+                    <p className="text-sm text-gray-600">{error}</p>
+                  </div>
+                </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-        <TabsContent value="validate">
-          <Card>
-            <CardHeader>
-              <CardTitle>데이터 검증</CardTitle>
-              <CardDescription>데이터 검증을 시작하세요.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-6">
-                <div className="space-y-2">
-                  <h3 className="font-medium">데이터 미리보기</h3>
-                  <div className="border rounded-lg overflow-hidden">
+      {activeTab === "validate" && (
+        <Card className="toss-card">
+          <CardContent className="p-8">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold mb-2">데이터 검증</h2>
+              <p className="text-gray-500 mb-6">데이터 검증을 시작하세요.</p>
+
+              <div className="space-y-6">
+                <div>
+                  <h3 className="font-medium mb-3">데이터 미리보기</h3>
+                  <div className="border border-gray-100 rounded-lg overflow-hidden bg-white shadow-sm">
                     <Table>
                       <TableHeader>
-                        <TableRow>
-                          <TableHead>이름</TableHead>
-                          <TableHead>ISBN</TableHead>
-                          <TableHead>가격</TableHead>
+                        <TableRow className="bg-gray-50">
+                          <TableHead className="font-medium">이름</TableHead>
+                          <TableHead className="font-medium">ISBN</TableHead>
+                          <TableHead className="font-medium">가격</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {csvData.slice(0, 5).map((item, index) => (
-                          <TableRow key={index}>
+                          <TableRow key={index} className="hover:bg-gray-50">
                             <TableCell>{item["이름"]}</TableCell>
                             <TableCell>{item["ISBN"]}</TableCell>
                             <TableCell>{formatPrice(item["가격"])}</TableCell>
@@ -437,7 +464,7 @@ export default function CsvValidator() {
                       </TableBody>
                     </Table>
                     {csvData.length > 5 && (
-                      <div className="p-2 text-center text-sm text-muted-foreground">
+                      <div className="p-3 text-center text-sm text-gray-500 bg-gray-50 border-t border-gray-100">
                         외 {csvData.length - 5}개 항목
                       </div>
                     )}
@@ -445,169 +472,179 @@ export default function CsvValidator() {
                 </div>
 
                 <div className="pt-4">
-                  <Button onClick={validateData} disabled={loading}>
+                  <Button
+                    onClick={validateData}
+                    disabled={loading}
+                    className="toss-button-primary px-6 py-2.5 w-full md:w-auto"
+                  >
                     {loading ? "검증 중..." : "데이터 검증 시작"}
                   </Button>
                 </div>
 
                 {loading && (
-                  <div className="space-y-2">
+                  <div className="space-y-2 mt-4">
                     <div className="flex justify-between text-sm">
-                      <span>검증 진행 중...</span>
-                      <span>{progress}%</span>
+                      <span className="font-medium">검증 진행 중...</span>
+                      <span className="font-medium text-primary">{progress}%</span>
                     </div>
-                    <Progress value={progress} />
+                    <Progress value={progress} className="h-2 bg-blue-100" />
                   </div>
                 )}
 
                 {error && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>오류</AlertTitle>
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
+                  <div className="bg-red-50 rounded-lg p-4 mt-4 flex items-start">
+                    <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 mr-3 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-medium text-red-700 mb-1">오류</h3>
+                      <p className="text-sm text-gray-600">{error}</p>
+                    </div>
+                  </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-        <TabsContent value="results">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle>검증 결과</CardTitle>
-                  <CardDescription>
-                    총 {results.length}개 항목 중 {getValidCount()}개 일치, {getInvalidCount()}개 불일치
-                  </CardDescription>
+      {activeTab === "results" && (
+        <Card className="toss-card">
+          <CardContent className="p-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+              <div>
+                <h2 className="text-xl font-bold mb-1">검증 결과</h2>
+                <p className="text-gray-500">
+                  총 {results.length}개 항목 중 {getValidCount()}개 일치, {getInvalidCount()}개 불일치
+                </p>
+              </div>
+              <Button
+                onClick={downloadResultsCSV}
+                className="toss-button-outline mt-4 md:mt-0 px-5 py-2.5 flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                CSV 다운로드
+              </Button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex gap-6 mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                  <span className="text-sm">일치: {getValidCount()}</span>
                 </div>
-                <Button onClick={downloadResultsCSV} variant="outline" className="flex items-center gap-2">
-                  <Download className="h-4 w-4" />
-                  CSV 다운로드
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                  <span className="text-sm">불일치: {getInvalidCount()}</span>
+                </div>
+              </div>
+
+              <div className="border border-gray-100 rounded-lg overflow-hidden bg-white shadow-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50">
+                      <TableHead className="w-[50px] font-medium">번호</TableHead>
+                      <TableHead className="cursor-pointer font-medium w-[30%]" onClick={() => handleSort("이름")}>
+                        도서명 {renderSortIcon("이름")}
+                      </TableHead>
+                      <TableHead className="cursor-pointer font-medium" onClick={() => handleSort("ISBN")}>
+                        ISBN {renderSortIcon("ISBN")}
+                      </TableHead>
+                      <TableHead className="cursor-pointer font-medium" onClick={() => handleSort("가격")}>
+                        가격 {renderSortIcon("가격")}
+                      </TableHead>
+                      <TableHead className="cursor-pointer font-medium" onClick={() => handleSort("상태")}>
+                        상태 {renderSortIcon("상태")}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedResults.map((result, index) => (
+                      <TableRow
+                        key={index}
+                        className={`hover:bg-gray-50 ${result.error ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
+                        onClick={() => (result.error ? null : showDetails(result))}
+                      >
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell className="truncate max-w-[200px]">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate" title={result.original["이름"]}>
+                              {result.original["이름"]}
+                            </span>
+                            {!result.error && result.apiResponse?.link && (
+                              <a
+                                href={result.apiResponse.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <ExternalLink className="h-4 w-4 text-gray-400 hover:text-primary flex-shrink-0" />
+                              </a>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{result.original["ISBN"]}</TableCell>
+                        <TableCell>{formatPrice(result.original["가격"])}</TableCell>
+                        <TableCell>
+                          {result.isValid ? (
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-red-500" />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="flex justify-end mt-6">
+                <Button onClick={() => setActiveTab("upload")} className="toss-button-primary px-6 py-2.5">
+                  새 파일 업로드
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full bg-green-500"></div>
-                    <span>일치: {getValidCount()}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full bg-red-500"></div>
-                    <span>불일치: {getInvalidCount()}</span>
-                  </div>
-                </div>
-
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[50px]">번호</TableHead>
-                        <TableHead className="cursor-pointer" onClick={() => handleSort("이름")}>
-                          도서명 {renderSortIcon("이름")}
-                        </TableHead>
-                        <TableHead className="cursor-pointer" onClick={() => handleSort("ISBN")}>
-                          ISBN {renderSortIcon("ISBN")}
-                        </TableHead>
-                        <TableHead className="cursor-pointer" onClick={() => handleSort("가격")}>
-                          가격 {renderSortIcon("가격")}
-                        </TableHead>
-                        <TableHead className="cursor-pointer" onClick={() => handleSort("상태")}>
-                          상태 {renderSortIcon("상태")}
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {sortedResults.map((result, index) => (
-                        <TableRow
-                          key={index}
-                          className={`${result.error ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:bg-muted/50"}`}
-                          onClick={() => (result.error ? null : showDetails(result))}
-                        >
-                          <TableCell>{index + 1}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {result.original["이름"]}
-                              {!result.error && result.apiResponse?.link && (
-                                <a
-                                  href={result.apiResponse.link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                                </a>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>{result.original["ISBN"]}</TableCell>
-                          <TableCell>{formatPrice(result.original["가격"])}</TableCell>
-                          <TableCell>
-                            {result.isValid ? (
-                              <CheckCircle className="h-5 w-5 text-green-500" />
-                            ) : (
-                              <XCircle className="h-5 w-5 text-red-500" />
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button onClick={() => setActiveTab("upload")}>새 파일 업로드</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 상세 정보 다이얼로그 */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl">도서 상세 정보</DialogTitle>
-            <DialogDescription>
-              {selectedResult?.isValid ? (
-                <Badge variant="outline" className="bg-green-50 text-green-700 hover:bg-green-50">
-                  일치
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="bg-red-50 text-red-700 hover:bg-red-50">
-                  불일치
-                </Badge>
-              )}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-3xl p-0 rounded-lg overflow-hidden">
+          <div className="bg-primary p-5">
+            <DialogHeader>
+              <DialogTitle className="text-lg text-white">도서 상세 정보</DialogTitle>
+              <div className="mt-2">
+                {selectedResult?.isValid ? (
+                  <span className="toss-badge-success">일치</span>
+                ) : (
+                  <span className="toss-badge-error">불일치</span>
+                )}
+              </div>
+            </DialogHeader>
+          </div>
 
           {selectedResult && (
-            <div className="space-y-6">
+            <div className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
               {/* 도서 기본 정보 */}
-              <div className="bg-muted/30 p-4 rounded-lg">
-                <h3 className="text-lg font-medium mb-3">도서 정보</h3>
+              <div className="toss-section">
+                <h3 className="detail-section-title">도서 정보</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* CSV 데이터 */}
                   <div className="space-y-3">
-                    <h4 className="font-medium text-sm text-muted-foreground">CSV 데이터</h4>
+                    <h4 className="detail-label">CSV 데이터</h4>
                     <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="font-medium">도서명:</span>
-                        <span className="text-right">{selectedResult.original["이름"]}</span>
+                      <div className="detail-item">
+                        <span className="detail-item-label">도서명:</span>
+                        <span className="detail-item-value">{selectedResult.original["이름"]}</span>
                       </div>
-                      <Separator />
-                      <div className="flex justify-between">
-                        <span className="font-medium">ISBN:</span>
-                        <span className="text-right">{selectedResult.original["ISBN"]}</span>
+                      <Separator className="bg-gray-100" />
+                      <div className="detail-item">
+                        <span className="detail-item-label">ISBN:</span>
+                        <span className="detail-item-value">{selectedResult.original["ISBN"]}</span>
                       </div>
-                      <Separator />
-                      <div className="flex justify-between">
-                        <span className="font-medium">가격:</span>
-                        <span className="text-right">{formatPrice(selectedResult.original["가격"])}원</span>
+                      <Separator className="bg-gray-100" />
+                      <div className="detail-item">
+                        <span className="detail-item-label">가격:</span>
+                        <span className="detail-item-value">{formatPrice(selectedResult.original["가격"])}원</span>
                       </div>
                     </div>
                   </div>
@@ -615,30 +652,30 @@ export default function CsvValidator() {
                   {/* API 응답 데이터 */}
                   {selectedResult.apiResponse && (
                     <div className="space-y-3">
-                      <h4 className="font-medium text-sm text-muted-foreground">API 응답 데이터</h4>
+                      <h4 className="detail-label">API 응답 데이터</h4>
                       <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="font-medium">도서명:</span>
+                        <div className="detail-item">
+                          <span className="detail-item-label">도서명:</span>
                           <span
-                            className={`text-right ${selectedResult.matchDetails?.title ? "text-green-600" : "text-red-600"}`}
+                            className={`detail-item-value ${selectedResult.matchDetails?.title ? "text-green-600" : "text-red-600"}`}
                           >
                             {selectedResult.apiResponse.title}
                           </span>
                         </div>
-                        <Separator />
-                        <div className="flex justify-between">
-                          <span className="font-medium">ISBN:</span>
+                        <Separator className="bg-gray-100" />
+                        <div className="detail-item">
+                          <span className="detail-item-label">ISBN:</span>
                           <span
-                            className={`text-right ${selectedResult.matchDetails?.isbn ? "text-green-600" : "text-red-600"}`}
+                            className={`detail-item-value ${selectedResult.matchDetails?.isbn ? "text-green-600" : "text-red-600"}`}
                           >
                             {selectedResult.apiResponse.isbn}
                           </span>
                         </div>
-                        <Separator />
-                        <div className="flex justify-between">
-                          <span className="font-medium">가격:</span>
+                        <Separator className="bg-gray-100" />
+                        <div className="detail-item">
+                          <span className="detail-item-label">가격:</span>
                           <span
-                            className={`text-right ${selectedResult.matchDetails?.discount ? "text-green-600" : "text-red-600"}`}
+                            className={`detail-item-value ${selectedResult.matchDetails?.discount ? "text-green-600" : "text-red-600"}`}
                           >
                             {formatPrice(selectedResult.apiResponse.discount)}원
                           </span>
@@ -651,11 +688,13 @@ export default function CsvValidator() {
 
               {/* 오류 메시지 */}
               {selectedResult.error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>오류</AlertTitle>
-                  <AlertDescription>{selectedResult.error}</AlertDescription>
-                </Alert>
+                <div className="bg-red-50 rounded-lg p-4 flex items-start">
+                  <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 mr-3 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-xs font-medium text-red-700 mb-1">오류</h3>
+                    <p className="text-xs text-gray-600">{selectedResult.error}</p>
+                  </div>
+                </div>
               )}
 
               {/* API 응답 추가 정보 */}
@@ -663,34 +702,34 @@ export default function CsvValidator() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* 추가 메타데이터 */}
-                    <div className="md:col-span-2 space-y-4">
-                      <h3 className="text-lg font-medium">추가 정보</h3>
+                    <div className="md:col-span-2 space-y-3">
+                      <h3 className="detail-section-title">추가 정보</h3>
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-muted/30 p-3 rounded-md">
-                          <h4 className="text-sm font-medium text-muted-foreground mb-1">저자</h4>
-                          <p>{selectedResult.apiResponse.author || "-"}</p>
+                        <div className="toss-section">
+                          <h4 className="detail-label">저자</h4>
+                          <p className="detail-value">{selectedResult.apiResponse.author || "-"}</p>
                         </div>
-                        <div className="bg-muted/30 p-3 rounded-md">
-                          <h4 className="text-sm font-medium text-muted-foreground mb-1">출판사</h4>
-                          <p>{selectedResult.apiResponse.publisher || "-"}</p>
+                        <div className="toss-section">
+                          <h4 className="detail-label">출판사</h4>
+                          <p className="detail-value">{selectedResult.apiResponse.publisher || "-"}</p>
                         </div>
-                        <div className="bg-muted/30 p-3 rounded-md">
-                          <h4 className="text-sm font-medium text-muted-foreground mb-1">출판일</h4>
-                          <p>{formatPubDate(selectedResult.apiResponse.pubdate) || "-"}</p>
+                        <div className="toss-section">
+                          <h4 className="detail-label">출판일</h4>
+                          <p className="detail-value">{formatPubDate(selectedResult.apiResponse.pubdate) || "-"}</p>
                         </div>
-                        <div className="bg-muted/30 p-3 rounded-md">
-                          <h4 className="text-sm font-medium text-muted-foreground mb-1">링크</h4>
+                        <div className="toss-section">
+                          <h4 className="detail-label">링크</h4>
                           {selectedResult.apiResponse.link ? (
                             <a
                               href={selectedResult.apiResponse.link}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline flex items-center gap-1"
+                              className="text-primary hover:underline flex items-center gap-1 text-xs"
                             >
                               보기 <ExternalLink className="h-3 w-3" />
                             </a>
                           ) : (
-                            <p>-</p>
+                            <p className="detail-value">-</p>
                           )}
                         </div>
                       </div>
@@ -699,11 +738,11 @@ export default function CsvValidator() {
                     {/* 도서 이미지 */}
                     {selectedResult.apiResponse.image && (
                       <div className="flex justify-center items-start">
-                        <div className="border rounded-md p-2 bg-white">
+                        <div className="border rounded-lg p-2 bg-white shadow-sm">
                           <img
                             src={selectedResult.apiResponse.image || "/placeholder.svg"}
                             alt={selectedResult.apiResponse.title}
-                            className="max-h-40 object-contain"
+                            className="max-h-36 object-contain"
                           />
                         </div>
                       </div>
@@ -712,9 +751,9 @@ export default function CsvValidator() {
 
                   {/* 도서 설명 */}
                   {selectedResult.apiResponse.description && (
-                    <div className="mt-4 bg-muted/30 p-4 rounded-lg">
-                      <h4 className="font-medium mb-2">도서 설명</h4>
-                      <p className="text-sm whitespace-pre-line">{selectedResult.apiResponse.description}</p>
+                    <div className="toss-section">
+                      <h4 className="detail-label mb-2">도서 설명</h4>
+                      <p className="detail-description">{selectedResult.apiResponse.description}</p>
                     </div>
                   )}
                 </div>
@@ -723,9 +762,9 @@ export default function CsvValidator() {
               {/* 링크 */}
               {selectedResult.apiResponse?.link && (
                 <div className="flex justify-end mt-4">
-                  <Button asChild variant="outline">
+                  <Button asChild className="toss-button-primary px-5 py-2 text-xs">
                     <a href={selectedResult.apiResponse.link} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="mr-2 h-4 w-4" />
+                      <ExternalLink className="mr-2 h-3 w-3" />
                       상세 페이지 보기
                     </a>
                   </Button>
@@ -735,19 +774,6 @@ export default function CsvValidator() {
           )}
         </DialogContent>
       </Dialog>
-
-      {/* 오류 알림 다이얼로그 */}
-      <AlertDialog open={alertDialogOpen} onOpenChange={setAlertDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>API 오류</AlertDialogTitle>
-            <AlertDialogDescription>{alertMessage}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction>확인</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }
