@@ -25,6 +25,14 @@ import {
 } from "lucide-react"
 import Papa from "papaparse"
 
+// ISBN 정제 함수 추가 (import 구문 아래, interface ColumnMapping 위에 추가)
+// 숫자만 추출하는 함수
+const cleanISBN = (isbn: string): string => {
+  if (!isbn) return ""
+  // 숫자가 아닌 모든 문자(공백, 하이픈 등) 제거
+  return isbn.replace(/[^0-9]/g, "")
+}
+
 // 매핑 필드 타입
 interface ColumnMapping {
   title: string
@@ -176,7 +184,8 @@ export default function CsvValidator() {
 
       for (let i = 0; i < csvData.length; i++) {
         const item = csvData[i]
-        const isbn = item[columnMapping.isbn]
+        const originalISBN = item[columnMapping.isbn]
+        const isbn = cleanISBN(originalISBN)
 
         if (!isbn) {
           validationResults.push({
@@ -218,7 +227,8 @@ export default function CsvValidator() {
           // 값 비교
           const titleMatch =
             apiItem.title.includes(item[columnMapping.title]) || item[columnMapping.title].includes(apiItem.title)
-          const isbnMatch = apiItem.isbn === isbn
+          const apiISBN = cleanISBN(apiItem.isbn)
+          const isbnMatch = apiISBN === isbn
 
           // 가격 비교 (숫자로 변환하여 비교)
           const apiPrice = apiItem.discount || "0"
@@ -810,7 +820,15 @@ export default function CsvValidator() {
                       <Separator className="bg-gray-100" />
                       <div className="detail-item">
                         <span className="detail-item-label">ISBN:</span>
-                        <span className="detail-item-value">{selectedResult.original[columnMapping.isbn]}</span>
+                        <span className="detail-item-value">
+                          {selectedResult.original[columnMapping.isbn]}
+                          {cleanISBN(selectedResult.original[columnMapping.isbn]) !==
+                            selectedResult.original[columnMapping.isbn] && (
+                            <span className="text-xs text-gray-500 block">
+                              (정제됨: {cleanISBN(selectedResult.original[columnMapping.isbn])})
+                            </span>
+                          )}
+                        </span>
                       </div>
                       <Separator className="bg-gray-100" />
                       <div className="detail-item">
@@ -842,6 +860,11 @@ export default function CsvValidator() {
                             className={`detail-item-value ${selectedResult.matchDetails?.isbn ? "text-green-600" : "text-red-600"}`}
                           >
                             {selectedResult.apiResponse.isbn}
+                            {cleanISBN(selectedResult.apiResponse.isbn) !== selectedResult.apiResponse.isbn && (
+                              <span className="text-xs text-gray-500 block">
+                                (정제됨: {cleanISBN(selectedResult.apiResponse.isbn)})
+                              </span>
+                            )}
                           </span>
                         </div>
                         <Separator className="bg-gray-100" />
