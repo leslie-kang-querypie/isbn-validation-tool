@@ -14,7 +14,6 @@ import {
   Upload,
   FileUp,
   CheckCircle,
-  XCircle,
   AlertCircle,
   ExternalLink,
   ChevronUp,
@@ -22,15 +21,32 @@ import {
   Download,
   Info,
   ArrowUpDown,
+  AlertTriangle,
 } from "lucide-react"
 import Papa from "papaparse"
 
-// ISBN 정제 함수 추가 (import 구문 아래, interface ColumnMapping 위에 추가)
+// ISBN 정제 함수 추가
 // 숫자만 추출하는 함수
 const cleanISBN = (isbn: string): string => {
   if (!isbn) return ""
   // 숫자가 아닌 모든 문자(공백, 하이픈 등) 제거
   return isbn.replace(/[^0-9]/g, "")
+}
+
+// 작가 정보 비교 함수
+const compareAuthors = (author1: string, author2: string): boolean => {
+  if (!author1 || !author2) return false
+
+  // 작가 이름에서 공백, 쉼표 등 제거하고 소문자로 변환하여 비교
+  const normalizeAuthor = (author: string) => {
+    return author.toLowerCase().replace(/[,\s]/g, "")
+  }
+
+  const normalizedAuthor1 = normalizeAuthor(author1)
+  const normalizedAuthor2 = normalizeAuthor(author2)
+
+  // 한 쪽이 다른 쪽을 포함하는지 확인
+  return normalizedAuthor1.includes(normalizedAuthor2) || normalizedAuthor2.includes(normalizedAuthor1)
 }
 
 // 매핑 필드 타입
@@ -50,6 +66,7 @@ interface ValidationResult {
   isValid: boolean
   apiResponse?: any
   error?: string
+  notFound?: boolean // ISBN이 존재하지 않는 경우
   matchDetails?: {
     title: boolean
     isbn: boolean
@@ -58,10 +75,17 @@ interface ValidationResult {
   }
 }
 
-// 가격 포맷팅 함수
+// 가격 포맷팅 함수를 수정하여 NaN 문제 해결
 const formatPrice = (price: string | number) => {
   if (!price) return "0"
-  return Number(price).toLocaleString("ko-KR")
+
+  // 문자열이면 숫자로 변환 시도
+  const numPrice = typeof price === "string" ? Number(price.replace(/[^0-9.-]/g, "")) : Number(price)
+
+  // NaN 체크
+  if (isNaN(numPrice)) return "0"
+
+  return numPrice.toLocaleString("ko-KR")
 }
 
 // 정렬 타입
@@ -95,7 +119,9 @@ export default function CsvValidator() {
     setError("")
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
-      if (selectedFile.type !== "text/csv" && !selectedFile.name.endsWith(".csv")) {
+      // 파일 확장자 확인 (한글 파일명 지원)
+      const fileExtension = selectedFile.name.split(".").pop()?.toLowerCase()
+      if (fileExtension !== "csv") {
         setError("CSV 파일만 업로드 가능합니다.")
         return
       }
@@ -105,45 +131,52 @@ export default function CsvValidator() {
   }
 
   const parseCSV = (file: File) => {
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const parsedData = results.data as any[]
+    // 파일을 직접 읽어서 인코딩 처리
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const content = e.target?.result as string
 
-        if (parsedData.length > 0) {
-          // 사용 가능한 열 목록 추출
-          const firstRow = parsedData[0]
-          const columns = Object.keys(firstRow)
-          setAvailableColumns(columns)
+      Papa.parse(content, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const parsedData = results.data as any[]
 
-          // 자동 매핑 시도 (일반적인 이름 기반)
-          const mapping: ColumnMapping = {
-            title:
-              columns.find(
-                (col) => col.includes("제목") || col.includes("타이틀") || col.toLowerCase().includes("title"),
-              ) || "",
-            isbn: columns.find((col) => col.includes("ISBN") || col.includes("isbn")) || "",
-            price:
-              columns.find(
-                (col) => col.includes("가격") || col.includes("재정가") || col.toLowerCase().includes("price"),
-              ) || "",
-            author:
-              columns.find(
-                (col) => col.includes("저자") || col.includes("작가") || col.toLowerCase().includes("author"),
-              ) || "",
+          if (parsedData.length > 0) {
+            // 사용 가능한 열 목록 추출
+            const firstRow = parsedData[0]
+            const columns = Object.keys(firstRow)
+            setAvailableColumns(columns)
+
+            // 자동 매핑 시도 (일반적인 이름 기반)
+            const mapping: ColumnMapping = {
+              title:
+                columns.find(
+                  (col) => col.includes("제목") || col.includes("타이틀") || col.toLowerCase().includes("title"),
+                ) || "",
+              isbn: columns.find((col) => col.includes("ISBN") || col.includes("isbn")) || "",
+              price:
+                columns.find(
+                  (col) => col.includes("가격") || col.includes("재정가") || col.toLowerCase().includes("price"),
+                ) || "",
+              author:
+                columns.find(
+                  (col) => col.includes("저자") || col.includes("작가") || col.toLowerCase().includes("author"),
+                ) || "",
+            }
+
+            setColumnMapping(mapping)
+            setCsvData(parsedData)
+            setActiveTab("validate")
+            setMappingComplete(false)
           }
-
-          setColumnMapping(mapping)
-          setCsvData(parsedData)
-          setActiveTab("validate")
-          setMappingComplete(false)
-        }
-      },
-      error: (error) => {
-        setError(`CSV 파싱 오류: ${error.message}`)
-      },
-    })
+        },
+        error: (error) => {
+          setError(`CSV 파싱 오류: ${error.message}`)
+        },
+      })
+    }
+    reader.readAsText(file, "UTF-8")
   }
 
   const handleColumnMappingChange = (field: keyof ColumnMapping, column: string) => {
@@ -154,11 +187,11 @@ export default function CsvValidator() {
   }
 
   const confirmMapping = () => {
-    // 필수 필드 검증
-    if (!columnMapping.isbn || !columnMapping.price || !columnMapping.author) {
+    // 필수 필드 검증 (도서명도 필수로 변경)
+    if (!columnMapping.title || !columnMapping.isbn || !columnMapping.price || !columnMapping.author) {
       toast({
         title: "필드 매핑 필요",
-        description: "ISBN, 가격, 작가명 필드를 모두 매핑해주세요.",
+        description: "도서명, ISBN, 가격, 작가명 필드를 모두 매핑해주세요.",
         variant: "destructive",
       })
       return
@@ -217,6 +250,7 @@ export default function CsvValidator() {
               original: item,
               isValid: false,
               apiResponse: data,
+              notFound: true, // ISBN이 존재하지 않는 경우
               error: "API에서 결과를 찾을 수 없습니다.",
             })
             continue
@@ -235,10 +269,10 @@ export default function CsvValidator() {
           const csvPrice = item[columnMapping.price] || "0"
           const priceMatch = String(apiPrice) === String(csvPrice)
 
-          // 작가 비교 추가
+          // 작가 비교 추가 - 개선된 비교 로직 사용
           const apiAuthor = apiItem.author || ""
           const csvAuthor = item[columnMapping.author] || ""
-          const authorMatch = apiAuthor.includes(csvAuthor) || csvAuthor.includes(apiAuthor)
+          const authorMatch = compareAuthors(apiAuthor, csvAuthor)
 
           // 제목은 검증에서 제외하고 ISBN, 가격, 작가만 검증
           const isValid = isbnMatch && priceMatch && authorMatch
@@ -366,6 +400,23 @@ export default function CsvValidator() {
     )
   }
 
+  // 상태 아이콘 렌더링 함수를 수정하여 ISBN 없음을 회색 X 아이콘으로 변경
+  const renderStatusIcon = (result: ValidationResult) => {
+    if (result.error && !result.notFound) {
+      return <AlertCircle className="h-5 w-5 text-red-500" title="API 오류" />
+    }
+
+    if (result.notFound) {
+      return <AlertCircle className="h-5 w-5 text-gray-500" title="ISBN을 찾을 수 없음" />
+    }
+
+    if (!result.isValid) {
+      return <AlertTriangle className="h-5 w-5 text-yellow-500" title="데이터 불일치" />
+    }
+
+    return <CheckCircle className="h-5 w-5 text-green-500" title="일치" />
+  }
+
   // 출판일 포맷팅
   const formatPubDate = (pubdate: string) => {
     if (!pubdate || pubdate.length !== 8) return pubdate
@@ -466,7 +517,10 @@ export default function CsvValidator() {
                 <Info className="h-5 w-5 text-primary mt-0.5 mr-3 flex-shrink-0" />
                 <div>
                   <h3 className="font-medium text-primary mb-1">필수 열 정보</h3>
-                  <p className="text-sm text-gray-600">CSV 파일에는 다음 열이 포함되어야 합니다: 이름, ISBN, 가격</p>
+                  <p className="text-sm text-gray-600">
+                    CSV 파일에는 다음 열이 포함되어야 합니다: 도서명, ISBN, 가격, 작가명. 검증은 ISBN, 가격, 작가명을
+                    기준으로 이루어집니다.
+                  </p>
                 </div>
               </div>
 
@@ -697,19 +751,29 @@ export default function CsvValidator() {
             </div>
 
             <div className="space-y-6">
-              <div className="flex gap-6 mb-4">
+              <div className="flex flex-wrap gap-4 mb-4">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                  <span className="text-sm">일치: {getValidCount()}</span>
+                  <span className="text-sm">일치</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                  <span className="text-sm">데이터 불일치</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                  <span className="text-sm">ISBN 없음</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                  <span className="text-sm">불일치: {getInvalidCount()}</span>
+                  <span className="text-sm">API 오류</span>
                 </div>
               </div>
 
               <div className="border border-gray-100 rounded-lg overflow-hidden bg-white shadow-sm">
                 <Table>
+                  {/* 검증 결과 테이블 부분을 수정 */}
+                  {/* TableHeader 부분에서 "상태" 열을 "결과"로 변경 */}
                   <TableHeader>
                     <TableRow className="bg-gray-50">
                       <TableHead className="w-[50px] font-medium">번호</TableHead>
@@ -730,49 +794,71 @@ export default function CsvValidator() {
                         </TableHead>
                       )}
                       <TableHead className="cursor-pointer font-medium" onClick={() => handleSort("status")}>
-                        상태 {renderSortIcon("status")}
+                        결과 {renderSortIcon("status")}
                       </TableHead>
                     </TableRow>
                   </TableHeader>
+
+                  {/* TableBody 부분을 수정하여 API 응답 값을 표시하고 API 응답이 없는 경우 처리 */}
                   <TableBody>
-                    {sortedResults.map((result, index) => (
-                      <TableRow
-                        key={index}
-                        className={`hover:bg-gray-50 ${result.error ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}
-                        onClick={() => (result.error ? null : showDetails(result))}
-                      >
-                        <TableCell>{index + 1}</TableCell>
-                        {columnMapping.title && (
-                          <TableCell className="truncate max-w-[200px]">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate" title={result.original[columnMapping.title]}>
-                                {result.original[columnMapping.title]}
-                              </span>
-                              {!result.error && result.apiResponse?.link && (
-                                <a
-                                  href={result.apiResponse.link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
+                    {sortedResults.map((result, index) => {
+                      const hasApiResponse = result.apiResponse && !result.notFound
+                      const isDisabled = !hasApiResponse || (result.error && !result.notFound)
+
+                      return (
+                        <TableRow
+                          key={index}
+                          className={`hover:bg-gray-50 ${isDisabled ? "bg-gray-100 opacity-70" : "cursor-pointer"}`}
+                          onClick={() => (isDisabled ? null : showDetails(result))}
+                        >
+                          <TableCell>{index + 1}</TableCell>
+                          {columnMapping.title && (
+                            <TableCell className="truncate max-w-[200px]">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="truncate"
+                                  title={
+                                    hasApiResponse ? result.apiResponse.title : result.original[columnMapping.title]
+                                  }
                                 >
-                                  <ExternalLink className="h-4 w-4 text-gray-400 hover:text-primary flex-shrink-0" />
-                                </a>
-                              )}
-                            </div>
-                          </TableCell>
-                        )}
-                        <TableCell>{result.original[columnMapping.isbn]}</TableCell>
-                        <TableCell>{formatPrice(result.original[columnMapping.price])}</TableCell>
-                        {columnMapping.author && <TableCell>{result.original[columnMapping.author]}</TableCell>}
-                        <TableCell>
-                          {result.isValid ? (
-                            <CheckCircle className="h-5 w-5 text-green-500" />
-                          ) : (
-                            <XCircle className="h-5 w-5 text-red-500" />
+                                  {hasApiResponse ? result.apiResponse.title : result.original[columnMapping.title]}
+                                </span>
+                                {hasApiResponse && result.apiResponse?.link && (
+                                  <a
+                                    href={result.apiResponse.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <ExternalLink className="h-4 w-4 text-gray-400 hover:text-primary flex-shrink-0" />
+                                  </a>
+                                )}
+                              </div>
+                            </TableCell>
                           )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          <TableCell
+                            className={result.matchDetails?.isbn ? "text-green-600 font-medium" : "text-red-600"}
+                          >
+                            {hasApiResponse ? result.apiResponse.isbn : result.original[columnMapping.isbn]}
+                          </TableCell>
+                          <TableCell
+                            className={result.matchDetails?.discount ? "text-green-600 font-medium" : "text-red-600"}
+                          >
+                            {hasApiResponse
+                              ? formatPrice(result.apiResponse.discount)
+                              : formatPrice(result.original[columnMapping.price])}
+                          </TableCell>
+                          {columnMapping.author && (
+                            <TableCell
+                              className={result.matchDetails?.author ? "text-green-600 font-medium" : "text-red-600"}
+                            >
+                              {hasApiResponse ? result.apiResponse.author : result.original[columnMapping.author]}
+                            </TableCell>
+                          )}
+                          <TableCell>{renderStatusIcon(result)}</TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -796,6 +882,8 @@ export default function CsvValidator() {
               <div className="mt-2">
                 {selectedResult?.isValid ? (
                   <span className="toss-badge-success">일치</span>
+                ) : selectedResult?.notFound ? (
+                  <span className="toss-badge-error">ISBN 없음</span>
                 ) : (
                   <span className="toss-badge-error">불일치</span>
                 )}
@@ -820,15 +908,7 @@ export default function CsvValidator() {
                       <Separator className="bg-gray-100" />
                       <div className="detail-item">
                         <span className="detail-item-label">ISBN:</span>
-                        <span className="detail-item-value">
-                          {selectedResult.original[columnMapping.isbn]}
-                          {cleanISBN(selectedResult.original[columnMapping.isbn]) !==
-                            selectedResult.original[columnMapping.isbn] && (
-                            <span className="text-xs text-gray-500 block">
-                              (정제됨: {cleanISBN(selectedResult.original[columnMapping.isbn])})
-                            </span>
-                          )}
-                        </span>
+                        <span className="detail-item-value">{selectedResult.original[columnMapping.isbn]}</span>
                       </div>
                       <Separator className="bg-gray-100" />
                       <div className="detail-item">
@@ -836,6 +916,11 @@ export default function CsvValidator() {
                         <span className="detail-item-value">
                           {formatPrice(selectedResult.original[columnMapping.price])}원
                         </span>
+                      </div>
+                      <Separator className="bg-gray-100" />
+                      <div className="detail-item">
+                        <span className="detail-item-label">작가명:</span>
+                        <span className="detail-item-value">{selectedResult.original[columnMapping.author]}</span>
                       </div>
                     </div>
                   </div>
@@ -860,11 +945,6 @@ export default function CsvValidator() {
                             className={`detail-item-value ${selectedResult.matchDetails?.isbn ? "text-green-600" : "text-red-600"}`}
                           >
                             {selectedResult.apiResponse.isbn}
-                            {cleanISBN(selectedResult.apiResponse.isbn) !== selectedResult.apiResponse.isbn && (
-                              <span className="text-xs text-gray-500 block">
-                                (정제됨: {cleanISBN(selectedResult.apiResponse.isbn)})
-                              </span>
-                            )}
                           </span>
                         </div>
                         <Separator className="bg-gray-100" />
@@ -876,19 +956,15 @@ export default function CsvValidator() {
                             {formatPrice(selectedResult.apiResponse.discount)}원
                           </span>
                         </div>
-                        {columnMapping.author && (
-                          <>
-                            <Separator className="bg-gray-100" />
-                            <div className="detail-item">
-                              <span className="detail-item-label">작가명:</span>
-                              <span
-                                className={`detail-item-value ${selectedResult.matchDetails?.author ? "text-green-600" : "text-red-600"}`}
-                              >
-                                {selectedResult.apiResponse.author}
-                              </span>
-                            </div>
-                          </>
-                        )}
+                        <Separator className="bg-gray-100" />
+                        <div className="detail-item">
+                          <span className="detail-item-label">작가명:</span>
+                          <span
+                            className={`detail-item-value ${selectedResult.matchDetails?.author ? "text-green-600" : "text-red-600"}`}
+                          >
+                            {selectedResult.apiResponse.author}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}
