@@ -369,7 +369,12 @@ export default function CsvValidator() {
           // 가격 비교 (숫자로 변환하여 비교)
           const apiPrice = apiItem.discount || "0"
           const csvPrice = item[columnMapping.price] || "0"
-          const priceMatch = String(apiPrice) === String(csvPrice)
+          // 숫자만 추출하여 비교
+          const cleanPrice = (price: string | number) => {
+            if (typeof price === "number") return price
+            return Number(price.toString().replace(/[^0-9]/g, "")) || 0
+          }
+          const priceMatch = cleanPrice(apiPrice) === cleanPrice(csvPrice)
 
           // 작가 비교 추가 - 개선된 비교 로직 사용
           const apiAuthor = apiItem.author || ""
