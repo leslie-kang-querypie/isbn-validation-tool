@@ -312,10 +312,11 @@ export default function CsvValidator() {
     setProgress(0)
     setResults([])
     setError("")
+    setActiveTab("results") // 결과 탭으로 즉시 이동
 
     try {
-      const validationResults: ValidationResult[] = []
       const totalItems = csvData.length
+      let processedResults: ValidationResult[] = []
 
       for (let i = 0; i < csvData.length; i++) {
         const item = csvData[i]
@@ -323,11 +324,12 @@ export default function CsvValidator() {
         const isbn = cleanISBN(originalISBN)
 
         if (!isbn) {
-          validationResults.push({
+          processedResults.push({
             original: item,
             isValid: false,
             error: "ISBN 값이 비어있습니다.",
           })
+          setResults([...processedResults]) // 실시간으로 결과 업데이트
           continue
         }
 
@@ -348,13 +350,14 @@ export default function CsvValidator() {
 
           // API 응답 검증
           if (!data.items || data.items.length === 0) {
-            validationResults.push({
+            processedResults.push({
               original: item,
               isValid: false,
               apiResponse: data,
-              notFound: true, // ISBN이 존재하지 않는 경우
+              notFound: true,
               error: "API에서 결과를 찾을 수 없습니다.",
             })
+            setResults([...processedResults]) // 실시간으로 결과 업데이트
             continue
           }
 
@@ -384,17 +387,18 @@ export default function CsvValidator() {
           // 제목은 검증에서 제외하고 ISBN, 가격, 작가만 검증
           const isValid = isbnMatch && priceMatch && authorMatch
 
-          validationResults.push({
+          processedResults.push({
             original: item,
             isValid,
             apiResponse: apiItem,
             matchDetails: {
-              title: titleMatch, // 정보 제공용으로만 포함
+              title: titleMatch,
               isbn: isbnMatch,
               discount: priceMatch,
               author: authorMatch,
             },
           })
+          setResults([...processedResults]) // 실시간으로 결과 업데이트
         } catch (error) {
           const errorMessage = `API 호출 오류: ${error instanceof Error ? error.message : String(error)}`
 
@@ -405,19 +409,17 @@ export default function CsvValidator() {
             variant: "destructive",
           })
 
-          validationResults.push({
+          processedResults.push({
             original: item,
             isValid: false,
             error: errorMessage,
           })
+          setResults([...processedResults]) // 실시간으로 결과 업데이트
         }
 
         // Update progress
         setProgress(Math.round(((i + 1) / totalItems) * 100))
       }
-
-      setResults(validationResults)
-      setActiveTab("results")
     } catch (error) {
       setError(`검증 중 오류 발생: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
@@ -861,6 +863,27 @@ export default function CsvValidator() {
                     CSV 다운로드
                   </Button>
                 </div>
+
+                {/* 진행 상태 표시 UI 추가 */}
+                {loading && (
+                  <div className="mb-6 bg-blue-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                        <span className="font-medium">검증 진행 중...</span>
+                      </div>
+                      <span className="text-primary font-medium">{progress}%</span>
+                    </div>
+                    <Progress value={progress} className="h-2 bg-blue-100" />
+                    <div className="mt-2 text-sm text-gray-600">
+                      {csvData.length > 0 && (
+                        <p>
+                          현재 {results.length} / {csvData.length}개 항목 처리 완료
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-6">
                   <div className="flex flex-wrap gap-4 mb-4">
