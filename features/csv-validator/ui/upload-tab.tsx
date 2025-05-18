@@ -24,8 +24,7 @@ export const UploadTab = ({ file, error, onFileUpload }: UploadTabProps) => {
             <div>
               <h3 className="font-medium text-primary mb-1">필수 열 정보</h3>
               <p className="text-sm text-gray-600">
-                CSV 파일에는 다음 열이 포함되어야 합니다: 도서명, ISBN, 가격, 작가명. 검증은 ISBN, 가격, 작가명을 기준으로
-                이루어집니다.
+                CSV 파일에는 다음 열이 포함되어야 합니다: <b>도서명, ISBN, 가격, 작가명.</b>
               </p>
             </div>
           </div>
