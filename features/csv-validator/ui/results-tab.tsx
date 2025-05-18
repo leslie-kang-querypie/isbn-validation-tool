@@ -213,7 +213,17 @@ export const ResultsTab = ({
       type="button"
     >
       <span>{filter.label}</span>
-      <span className={`${filter.color} rounded-full px-2 py-0.5 text-xs`}>{getFilteredResults().length}</span>
+      <span className={`${filter.color} rounded-full px-2 py-0.5 text-xs`}>
+        {filter.key === "all"
+          ? results.length
+          : filter.key === "valid"
+          ? filterStats.valid
+          : filter.key === "invalid"
+          ? filterStats.invalid
+          : filter.key === "notFound"
+          ? filterStats.notFound
+          : filterStats.error}
+      </span>
     </button>
   )
 
