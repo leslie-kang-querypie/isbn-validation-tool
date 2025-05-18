@@ -112,8 +112,16 @@ export const CsvValidator = () => {
       let valueA, valueB
 
       if (sortField === "status") {
-        valueA = a.isValid ? 1 : 0
-        valueB = b.isValid ? 1 : 0
+        // 상태 우선순위: 일치(4) > 데이터 불일치(3) > ISBN 없음(2) > API 오류(1)
+        if (a.isValid) valueA = 4
+        else if (!a.isValid && !a.error && !a.notFound) valueA = 3
+        else if (a.notFound) valueA = 2
+        else valueA = 1
+
+        if (b.isValid) valueB = 4
+        else if (!b.isValid && !b.error && !b.notFound) valueB = 3
+        else if (b.notFound) valueB = 2
+        else valueB = 1
       } else if (sortField === "title") {
         valueA = a.original[columnMapping.title] || ""
         valueB = b.original[columnMapping.title] || ""

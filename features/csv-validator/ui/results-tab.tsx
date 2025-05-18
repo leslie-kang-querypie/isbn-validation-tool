@@ -13,9 +13,11 @@ import {
   ArrowUpDown,
   ChevronUp,
   ChevronDown,
+  Filter,
 } from "lucide-react"
 import { formatPrice } from "../lib/utils/price"
 import { ColumnMapping, ValidationResult, SortField, SortDirection } from "../model/types"
+import { useState } from "react"
 
 interface ResultsTabProps {
   results: ValidationResult[]
@@ -44,6 +46,8 @@ export const ResultsTab = ({
   onDownloadResults,
   onNewUpload,
 }: ResultsTabProps) => {
+  const [activeFilters, setActiveFilters] = useState<string[]>([])
+
   const getValidCount = () => {
     return results.filter(r => r.isValid).length
   }
@@ -52,16 +56,36 @@ export const ResultsTab = ({
     return results.filter(r => !r.isValid).length
   }
 
+  const getFilteredResults = () => {
+    if (activeFilters.length === 0) return results
+
+    return results.filter(result => {
+      if (activeFilters.includes("valid") && result.isValid) return true
+      if (activeFilters.includes("invalid") && !result.isValid && !result.error && !result.notFound) return true
+      if (activeFilters.includes("notFound") && result.notFound) return true
+      if (activeFilters.includes("error") && result.error && !result.notFound) return true
+      return false
+    })
+  }
+
+  const toggleFilter = (filter: string) => {
+    setActiveFilters(prev => (prev.includes(filter) ? prev.filter(f => f !== filter) : [...prev, filter]))
+  }
+
   // 정렬 아이콘 표시
   const renderSortIcon = (field: SortField) => {
     if (sortField !== field) {
       return <ArrowUpDown className="h-4 w-4 inline ml-1 text-gray-400" />
     }
 
+    if (!sortDirection) {
+      return <ArrowUpDown className="h-4 w-4 inline ml-1 text-gray-400" />
+    }
+
     return sortDirection === "asc" ? (
-      <ChevronUp className="h-4 w-4 inline ml-1" />
+      <ChevronUp className="h-4 w-4 inline ml-1 text-primary" />
     ) : (
-      <ChevronDown className="h-4 w-4 inline ml-1" />
+      <ChevronDown className="h-4 w-4 inline ml-1 text-primary" />
     )
   }
 
@@ -72,7 +96,7 @@ export const ResultsTab = ({
     }
 
     if (result.notFound) {
-      return <AlertCircle className="h-5 w-5 text-gray-500" aria-label="ISBN을 찾을 수 없음" />
+      return <AlertCircle className="h-5 w-5 text-orange-500" aria-label="ISBN을 찾을 수 없음" />
     }
 
     if (!result.isValid) {
@@ -122,22 +146,56 @@ export const ResultsTab = ({
         )}
 
         <div className="space-y-6">
-          <div className="flex flex-wrap gap-4 mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
-              <span className="text-sm">일치</span>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <Filter className="h-4 w-4" />
+              <span>상태별 필터</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-              <span className="text-sm">데이터 불일치</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-              <span className="text-sm">ISBN 없음</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <span className="text-sm">API 오류</span>
+            <div className="flex flex-wrap gap-2">
+              <div
+                onClick={() => toggleFilter("valid")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm cursor-pointer transition-colors ${
+                  activeFilters.includes("valid")
+                    ? "bg-green-50 text-green-700 ring-1 ring-green-200"
+                    : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                <span>일치</span>
+              </div>
+              <div
+                onClick={() => toggleFilter("invalid")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm cursor-pointer transition-colors ${
+                  activeFilters.includes("invalid")
+                    ? "bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200"
+                    : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                <span>데이터 불일치</span>
+              </div>
+              <div
+                onClick={() => toggleFilter("notFound")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm cursor-pointer transition-colors ${
+                  activeFilters.includes("notFound")
+                    ? "bg-orange-50 text-orange-700 ring-1 ring-orange-200"
+                    : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                <span>ISBN 없음</span>
+              </div>
+              <div
+                onClick={() => toggleFilter("error")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm cursor-pointer transition-colors ${
+                  activeFilters.includes("error")
+                    ? "bg-red-50 text-red-700 ring-1 ring-red-200"
+                    : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                <span>API 오류</span>
+              </div>
             </div>
           </div>
 
@@ -147,28 +205,43 @@ export const ResultsTab = ({
                 <TableRow className="bg-gray-50">
                   <TableHead className="w-[50px] font-medium">번호</TableHead>
                   {columnMapping.title && (
-                    <TableHead className="cursor-pointer font-medium w-[30%]" onClick={() => onSort("title")}>
+                    <TableHead
+                      className="cursor-pointer font-medium w-[30%] hover:text-primary transition-colors"
+                      onClick={() => onSort("title")}
+                    >
                       도서명 {renderSortIcon("title")}
                     </TableHead>
                   )}
-                  <TableHead className="cursor-pointer font-medium" onClick={() => onSort("isbn")}>
+                  <TableHead
+                    className="cursor-pointer font-medium hover:text-primary transition-colors"
+                    onClick={() => onSort("isbn")}
+                  >
                     ISBN {renderSortIcon("isbn")}
                   </TableHead>
-                  <TableHead className="cursor-pointer font-medium" onClick={() => onSort("price")}>
+                  <TableHead
+                    className="cursor-pointer font-medium hover:text-primary transition-colors"
+                    onClick={() => onSort("price")}
+                  >
                     가격 {renderSortIcon("price")}
                   </TableHead>
                   {columnMapping.author && (
-                    <TableHead className="cursor-pointer font-medium" onClick={() => onSort("author")}>
+                    <TableHead
+                      className="cursor-pointer font-medium hover:text-primary transition-colors"
+                      onClick={() => onSort("author")}
+                    >
                       작가명 {renderSortIcon("author")}
                     </TableHead>
                   )}
-                  <TableHead className="cursor-pointer font-medium" onClick={() => onSort("status")}>
+                  <TableHead
+                    className="cursor-pointer font-medium hover:text-primary transition-colors"
+                    onClick={() => onSort("status")}
+                  >
                     결과 {renderSortIcon("status")}
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {results.map((result, index) => {
+                {getFilteredResults().map((result, index) => {
                   const hasApiResponse = result.apiResponse && !result.notFound
                   const isDisabled = !hasApiResponse || (result.error && !result.notFound)
 
