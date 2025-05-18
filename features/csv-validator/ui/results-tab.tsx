@@ -204,28 +204,37 @@ export const ResultsTab = ({
   type FilterType = (typeof FILTERS)[number]["key"]
 
   // 필터 버튼 렌더링 함수
-  const renderFilterButton = (filter: (typeof FILTERS)[number]) => (
-    <button
-      key={filter.key}
-      className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors
-        ${activeFilter === filter.key ? "bg-primary text-white" : "bg-gray-100 text-gray-900 hover:bg-gray-200"}`}
-      onClick={() => setActiveFilter(filter.key)}
-      type="button"
-    >
-      <span>{filter.label}</span>
-      <span className={`${filter.color} rounded-full px-2 py-0.5 text-xs`}>
-        {filter.key === "all"
-          ? results.length
-          : filter.key === "valid"
-          ? filterStats.valid
-          : filter.key === "invalid"
-          ? filterStats.invalid
-          : filter.key === "notFound"
-          ? filterStats.notFound
-          : filterStats.error}
-      </span>
-    </button>
-  )
+  const renderFilterButton = (filter: (typeof FILTERS)[number]) => {
+    const getFilterCount = (filterKey: FilterType) => {
+      switch (filterKey) {
+        case "all":
+          return results.length
+        case "valid":
+          return results.filter(r => r.isValid).length
+        case "invalid":
+          return results.filter(r => !r.isValid && !r.error && !r.notFound).length
+        case "notFound":
+          return results.filter(r => r.notFound).length
+        case "error":
+          return results.filter(r => r.error && !r.notFound).length
+        default:
+          return 0
+      }
+    }
+
+    return (
+      <button
+        key={filter.key}
+        className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors
+          ${activeFilter === filter.key ? "bg-primary text-white" : "bg-gray-100 text-gray-900 hover:bg-gray-200"}`}
+        onClick={() => setActiveFilter(filter.key)}
+        type="button"
+      >
+        <span>{filter.label}</span>
+        <span className={`${filter.color} rounded-full px-2 py-0.5 text-xs`}>{getFilterCount(filter.key)}</span>
+      </button>
+    )
+  }
 
   return (
     <Card className="toss-card">
