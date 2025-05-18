@@ -183,7 +183,7 @@ export const ResultsTab = ({
     }
 
     if (result.notFound) {
-      return <AlertCircle className="h-5 w-5 text-orange-500" aria-label="ISBN을 찾을 수 없음" />
+      return <AlertCircle className="h-5 w-5 text-gray-700" aria-label="ISBN을 찾을 수 없음" />
     }
 
     if (!result.isValid) {
